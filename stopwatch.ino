@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <IRremote.hpp>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
 #define DECODE_NEC        // Includes Apple and Onkyo. To enable all protocols , just comment/disable this line.
 #define IR_RECEIVE_PIN 2  // To be compatible with interrupt example, pin 2 is chosen here.
@@ -34,6 +36,40 @@ enum InputStates {
   IR_9
 };
 
+enum CustomChar {
+  SOUND_ICON = 0,
+  SOUND_MUTE_ICON = 1,
+  SOUND_LOW_ICON = 2,
+  SOUND_MEDIUM_ICON = 3,
+  SOUND_HIGH_ICON = 4,
+  TONE_ICON = 5,
+  BATTERY_ICON = 6
+};
+
+enum Sound {
+  MUTE,
+  LOW,
+  MEDIUM,
+  HIGH
+};
+
+enum Tone {
+    TONE_1,
+    TONE_2,
+    TONE_3
+};
+
+enum DisplayMode {
+  DEFAULT_MODE,
+  BLINK_TIMER_MODE,
+  BLINK_SOUND_MODE,
+  BLINK_TONE_MODE,
+  RUNNING_MODE,
+  PAUSE_MODE
+};
+
+unsigned long countdownTime;
+
 const int pushButtonPins[] = { 3, 4, 5, 6 };
 bool inputStates[NO_OF_INPUTS];
 bool inputStatesLast[NO_OF_INPUTS];
@@ -42,12 +78,103 @@ byte lastButtonState[4];
 unsigned long lastTimeButtonStateChanged[4] = { 0 };
 unsigned long debounceDuration = 200; // millis
 
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+
+//Custom Character
+byte soundIcon[] = {
+  B00001,
+  B00011,
+  B00111,
+  B11111,
+  B11111,
+  B00111,
+  B00011,
+  B00001
+};
+
+byte soundMuteIcon[] = {
+  B00000,
+  B00000,
+  B00000,
+  B00000,
+  B00000,
+  B00000,
+  B00000,
+  B00000
+};
+
+byte soundLowIcon[] = {
+  B00000,
+  B00000,
+  B00000,
+  B10000,
+  B10000,
+  B00000,
+  B00000,
+  B00000
+};
+
+byte soundMediumIcon[] = {
+  B00000,
+  B01000,
+  B00100,
+  B10100,
+  B10100,
+  B00100,
+  B01000,
+  B00000
+};
+
+byte soundHighIcon[] = {
+  B00010,
+  B01001,
+  B00101,
+  B10101,
+  B10101,
+  B00101,
+  B01001,
+  B00010
+};
+
+byte toneIcon[] = {
+  B00100,
+  B00110,
+  B00111,
+  B00100,
+  B11100,
+  B11100,
+  B11100,
+  B00000
+};
+
+byte batteryIcon[] = {
+  B00110,
+  B01111,
+  B01111,
+  B01111,
+  B01111,
+  B01111,
+  B01111,
+  B00000
+};
+
 void setup() {
   Serial.begin(9600);
   while (!Serial)
     ;  // Wait for Serial to become available.
 
   IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.createChar(SOUND_ICON, soundIcon);
+  lcd.createChar(SOUND_MUTE_ICON, soundMuteIcon);
+  lcd.createChar(SOUND_LOW_ICON, soundLowIcon);
+  lcd.createChar(SOUND_MEDIUM_ICON, soundMediumIcon);
+  lcd.createChar(SOUND_HIGH_ICON, soundHighIcon);
+  lcd.createChar(TONE_ICON, toneIcon);
+  lcd.createChar(BATTERY_ICON, batteryIcon);
+  lcd.home();
 
   // Set up the pin modes for the push buttons
   for (int i = 0; i < 4; i++) {
@@ -62,10 +189,16 @@ void setup() {
   }
 }
 
+void lcdInitialize();
 void updateButtonInputStates();
 void updateIRInputStates();
+void runBusinessLogic();
+void display();
 
 void loop() {
+
+  lcdInitialize();
+  
   // Handle button debouncing and updating input states
   for (int i = 0; i < 4; i++) {
     byte currentButtonState = digitalRead(pushButtonPins[i]);
@@ -81,20 +214,70 @@ void loop() {
     }
   }
 
+
   // Handle IR input updates
   updateIRInputStates();
 
-  bool isPrint = false;
+  bool isInputChanged = false;
   for (int i = 0; i < NO_OF_INPUTS; ++i) {
-    isPrint = isPrint || (inputStatesLast[i] != inputStates[i]);
+    isInputChanged = isInputChanged || (inputStatesLast[i] != inputStates[i]);
     inputStatesLast[i] = inputStates[i];
   }
-  if (isPrint) {
+  if (isInputChanged) {
     for (int i = 0; i < NO_OF_INPUTS; ++i) {
       Serial.print(inputStates[i]);
     }
     Serial.println();
+    runBusinessLogic();
+    display();
   }
+}
+
+void lcdInitialize() {
+    // Initialize the LCD
+      lcd.setCursor(0, 0);  
+        lcd.write(SOUND_ICON); 
+      lcd.setCursor(4, 0); 
+        lcd.write(TONE_ICON);
+      lcd.setCursor(19, 0); 
+        lcd.write(BATTERY_ICON);
+}
+
+void runBusinessLogic() {
+// button abuwama variable wenas wena tika
+}
+
+void display() {
+     // Display the sound level
+    soundLevel[0] = MUTE;
+    soundLevel[1] = LOW;
+    soundLevel[2] = MEDIUM;
+    soundLevel[3] = HIGH;
+    switch (soundLevel) {
+      case MUTE:
+        lcd.setCursor(1, 0);
+        lcd.write(SOUND_MUTE_ICON);
+        break;
+      case LOW:
+        lcd.setCursor(1, 0);
+        lcd.write(SOUND_LOW_ICON);
+        break;
+      case MEDIUM:
+        lcd.setCursor(1, 0);
+        lcd.write(SOUND_MEDIUM_ICON);
+        break;
+      case HIGH:
+        lcd.setCursor(1, 0);
+        lcd.write(SOUND_HIGH_ICON);
+        break;
+    }
+    switch (soundLevel) {
+          case 0xFFA25D:
+            Serial.println("CH-");
+            break;
+          case 0xFF629D:
+            Serial.println("CH");
+            break;
 }
 
 void updateButtonInputStates() {
